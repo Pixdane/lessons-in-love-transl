@@ -74,4 +74,4 @@ ln -s "$(pwd)/translator"        "$GAME_DIR/"
 
 ## 致谢
 
-本项目由 [Codex](https://openai.com/codex) + DeepSeek V4 Pro 协作完成。翻译风格参考 [galtransl](https://github.com/Prunoideae/galtransl) 的 Galgame 中文翻译规范。
+本项目由 [Codex](https://openai.com/codex) + DeepSeek V4 Pro 协作完成。翻译风格参考 [GalTransl](https://github.com/GalTransl/GalTransl) 的 Galgame 中文翻译规范。
