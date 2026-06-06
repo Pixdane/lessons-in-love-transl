@@ -79,16 +79,26 @@ init -100 python:
     _tl_api_key = _tl_api.get("api_key", "")
     _tl_api_ok = bool(_tl_api_key) and _tl_api_key != "YOUR_DEEPSEEK_API_KEY_HERE"
 
+    # -- request queue (Python 2/3 compat) --------------------------------------
+    try:
+        from queue import Queue
+    except ImportError:
+        from Queue import Queue
+    _TL_QUEUE_SIZE = _tl_api.get("queue_size", 20)
+
 
 init -99 python:
     class TranslatorEngine:
-        """Translation lifecycle: cache, background API calls."""
+        """Translation lifecycle: cache, serial request queue, background worker."""
 
         def __init__(self):
             self._lock = _threading.Lock()
-            self._pending = {}
-            self._done = {}
+            self._pending = {}    # key -> True (in queue or processing)
+            self._done = {}       # key -> translated text
+            self._queue = Queue(maxsize=_TL_QUEUE_SIZE)
+            self._start_worker()
 
+        # -- enable / disable ---------------------------------------------------
         @property
         def enabled(self):
             return _tl_state.get("enabled", True) and _tl_api_ok
@@ -98,11 +108,13 @@ init -99 python:
             _tl_state["enabled"] = val
             _tl_save_json(_TL_STATE, _tl_state)
 
+        # -- cache key ----------------------------------------------------------
         def _key(self, speaker, text):
             clean = text.replace("{i}", "").replace("{/i}", "")\
                         .replace("{b}", "").replace("{/b}", "").strip()
             return "{}|||{}".format(speaker or "(Narrator)", clean)
 
+        # -- main entry ---------------------------------------------------------
         def get(self, speaker, text):
             if not self.enabled:
                 return ""
@@ -121,6 +133,7 @@ init -99 python:
                     _tl_cache.clear()
                     _tl_cache.update(fresh)
                     return _tl_cache[key]
+            
             with self._lock:
                 if key in self._done:
                     result = self._done.pop(key)
@@ -130,10 +143,14 @@ init -99 python:
                 if key in self._pending:
                     return "..."
                 self._pending[key] = True
-            t = _threading.Thread(target=self._worker, args=(speaker, text), daemon=True)
-            t.start()
+            try:
+                self._queue.put_nowait((speaker, text))
+            except Exception:
+                with self._lock:
+                    self._pending.pop(key, None)
             return "..."
 
+        # -- refresh ------------------------------------------------------------
         def refresh(self, speaker, text):
             key = self._key(speaker, text)
             _tl_cache.pop(key, None)
@@ -143,24 +160,42 @@ init -99 python:
             _tl_save_json(_TL_CACHE, _tl_cache)
             return self.get(speaker, text)
 
+        def _start_worker(self):
+            t = _threading.Thread(target=self._worker_loop, daemon=True)
+            t.start()
+        
+        def _worker_loop(self):
+            while True:
+                speaker, text = self._queue.get()
+                result = self._call_api(speaker, text)
+                key = self._key(speaker, text)
+                with self._lock:
+                    self._done[key] = result
+                self._queue.task_done()
+        
+        def _build_user_msg(self, speaker, text):
+            return "Speaker: {}\n\nTranslate:\n{}".format(
+                speaker or "(Narrator)", text)
+
         def _call_api(self, speaker, text):
+            """Call API and return translation."""
             api = _tl_cfg.get("api", {})
             base = api.get("base_url", "https://api.deepseek.com/v1").rstrip("/")
             body = _json.dumps({
                 "model": api.get("model", "deepseek-chat"),
                 "messages": [
                     {"role": "system", "content": _tl_system_prompt},
-                    {"role": "user",
-                     "content": "Speaker: {}\n\nTranslate:\n{}".format(
-                         speaker or "(Narrator)", text)},
+                    {"role": "user", "content": self._build_user_msg(speaker, text)},
                 ],
                 "max_tokens": api.get("max_tokens", 1024),
                 "temperature": api.get("temperature", 0.3),
                 "stream": False,
             }).encode("utf-8")
+
             req = Request(base + "/chat/completions", data=body)
             req.add_header("Authorization", "Bearer {}".format(api.get("api_key", "")))
             req.add_header("Content-Type", "application/json")
+
             try:
                 resp = _tl_urlopen(req, timeout=30)
                 raw = resp.read().decode("utf-8")
@@ -168,6 +203,27 @@ init -99 python:
                 result = data["choices"][0]["message"]["content"].strip()
             except Exception as e:
                 return "[Error: {}]".format(str(e)[:80])
+
+            return self._post_process(result, text, speaker)
+
+        def _post_process(self, result, text, speaker=None):
+            import re as _tl_re
+            # Strip various speaker-name prefixes the LLM may add
+            if speaker:
+                for sep in (": ", ":", "：", "： ", "\n", "\uff1a\n"):
+                    if result.startswith(speaker + sep):
+                        result = result[len(speaker + sep):].strip()
+                        break
+            # Parenthetical speaker tags
+            result = _tl_re.sub(
+                r'^\((?:Narrator|旁白|Speaker|说话人)\)[:\uff1a]?\s*\n?',
+                '', result
+            ).strip()
+            # Bare speaker name with colon at start
+            result = _tl_re.sub(
+                r'^[A-Z][a-z]+[:\uff1a]\s*',
+                '', result
+            ).strip()
             wrappers = [('"', '"'), ("'", "'"), ("\u201c", "\u201d"), ("\u300c", "\u300d")]
             for left, right in wrappers:
                 if len(result) >= 2 and result.startswith(left) and result.endswith(right):
@@ -188,12 +244,6 @@ init -99 python:
             if cr.lower() == co.lower() and len(co) > 3:
                 return "[Same as original]"
             return result.strip()
-
-        def _worker(self, speaker, text):
-            key = self._key(speaker, text)
-            result = self._call_api(speaker, text)
-            with self._lock:
-                self._done[key] = result
 
     tl_engine = TranslatorEngine()
 
@@ -236,6 +286,8 @@ init -97 python:
         if not result:
             return renpy.text.text.Text("", substitute=False), None
 
+            txt = renpy.text.text.Text(result, style="tl_overlay_style", substitute=False)
+            return txt, 0.08
         if result == "...":
             return renpy.text.text.Text("", substitute=False), 0.3
 
@@ -377,7 +429,7 @@ screen history():
 
 init -94 python:
     style.history_tl = Style(style.history_text)
-    style.history_tl.size = 24
+    style.history_tl.size = 20
     style.history_tl.color = "#444444"
     style.history_tl.font = "translator/SourceHanSansCN-Regular.otf"
     style.history_tl.ypos = 30
