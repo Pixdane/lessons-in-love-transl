@@ -52,5 +52,6 @@
     "Yasu": "Female, intense and passionate. Speaks with fire and conviction. Speech pattern: dramatic, all-or-nothing, emotionally charged.",
     "Narrator": "The protagonist's inner voice. Male, adult teacher. Wry, self-deprecating, philosophical, and literary. His monologues are the heart of the game's prose — long, reflective, full of metaphors and dark humor. Translate with literary elegance. Speech pattern: contemplative, ironic, occasionally poetic, always intelligent. When no named character is speaking, this is the voice.",
     "Unknown": "Generic speaker or unnamed character. Translate neutrally without strong personality markers."
-  }
+  },
+  "font_path": "translator/SourceHanSansCN-Regular.otf"
 }

@@ -78,6 +78,7 @@ init -100 python:
     _tl_api = _tl_cfg.get("api", {})
     _tl_api_key = _tl_api.get("api_key", "")
     _tl_api_ok = bool(_tl_api_key) and _tl_api_key != "YOUR_DEEPSEEK_API_KEY_HERE"
+    _tl_font_path = _tl_cfg.get("font_path", "translator/SourceHanSansCN-Regular.otf")
 
     # -- request queue (Python 2/3 compat) --------------------------------------
     try:
@@ -314,7 +315,7 @@ init -96 python:
     style.tl_overlay_style = Style(style.default)
     style.tl_overlay_style.size = 36
     style.tl_overlay_style.color = "#ffffff"
-    style.tl_overlay_style.font = "translator/SourceHanSansCN-Regular.otf"
+    style.tl_overlay_style.font = _tl_font_path
     style.tl_overlay_style.line_spacing = 4
     style.tl_overlay_style.outlines = [(2, "#000000aa", 0, 0)]
 
@@ -369,7 +370,7 @@ init -95 python:
     style.tl_btn_text.selected_color = "#ffffff"
     style.tl_btn_text.insensitive_color = "#444444"
     style.tl_btn_text.outlines = [(1, "#000000cc", 0, 0)]
-    style.tl_btn_text.font = "translator/SourceHanSansCN-Regular.otf"
+    style.tl_btn_text.font = _tl_font_path
 
 
 # ================================================================
@@ -431,6 +432,6 @@ init -94 python:
     style.history_tl = Style(style.history_text)
     style.history_tl.size = 20
     style.history_tl.color = "#444444"
-    style.history_tl.font = "translator/SourceHanSansCN-Regular.otf"
+    style.history_tl.font = _tl_font_path
     style.history_tl.ypos = 30
     style.history_tl.line_spacing = 2
