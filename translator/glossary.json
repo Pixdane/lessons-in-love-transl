@@ -1,0 +1,56 @@
+{
+  "_comment": "Terminology glossary for Lessons in Love translation. English terms and their preferred Chinese translations. Injected into system prompt to ensure consistency across all 60+ script files.",
+
+  "honorifics_and_address": {
+    "Sensei": {"zh": "老师", "note": "Protagonist's title; never translate as 先生/教师"},
+    "Master": {"zh": "主人", "note": "Pet name Ami uses for Sensei"},
+    "Sir": {"zh": "阁下", "note": "Molly's mock-formal address to Sensei"},
+    "Supreme Overlord": {"zh": "至高霸主", "note": "Molly's chuunibyou nickname for Sensei"}
+  },
+
+  "locations": {
+    "shrine": {"zh": "神社", "note": "Maya's workplace"},
+    "dorm": {"zh": "宿舍", "note": "Student dormitory"},
+    "cafe": {"zh": "咖啡厅", "note": "Haruka's café"},
+    "pool": {"zh": "泳池", "note": "School swimming pool"},
+    "soccer field": {"zh": "足球场", "note": ""},
+    "bathhouse": {"zh": "澡堂", "note": ""},
+    "convenience store": {"zh": "便利店", "note": ""},
+    "park": {"zh": "公园", "note": ""},
+    "school": {"zh": "学校", "note": ""},
+    "classroom": {"zh": "教室", "note": ""},
+    "rooftop": {"zh": "天台", "note": "School rooftop"},
+    "beach": {"zh": "海边", "note": ""},
+    "hallway": {"zh": "走廊", "note": ""},
+    "library": {"zh": "图书馆", "note": ""},
+    "arcade": {"zh": "游戏厅", "note": ""},
+    "mall": {"zh": "商场", "note": ""},
+    "street": {"zh": "街上", "note": ""},
+    "apartment": {"zh": "公寓", "note": ""},
+    "kitchen": {"zh": "厨房", "note": ""},
+    "bedroom": {"zh": "卧室", "note": ""},
+    "office": {"zh": "办公室", "note": ""},
+    "restaurant": {"zh": "餐厅", "note": ""},
+    "bar": {"zh": "酒吧", "note": ""},
+    "Kumon-mi": {"zh": "Kumon-mi", "note": "Town name — keep untranslated"}
+  },
+
+  "game_concepts": {
+    "reset": {"zh": "重置", "note": "Story-cycle mechanic; do NOT translate as 重启/归零"},
+    "affection": {"zh": "好感度", "note": "Relationship stat"},
+    "lust": {"zh": "欲望值", "note": "Intimacy stat"},
+    "love": {"zh": "恋爱值", "note": "General relationship stat"},
+    "dorm war": {"zh": "宿舍战", "note": "Recurring story event"},
+    "beach vacation": {"zh": "海边度假", "note": "Recurring story event"},
+    "sleepover": {"zh": "留宿", "note": ""},
+    "date": {"zh": "约会", "note": ""},
+    "text message": {"zh": "短信", "note": ""},
+    "phone call": {"zh": "电话", "note": ""}
+  },
+
+  "meta_terms": {
+    "narrator": {"zh": "旁白", "note": "The unnamed narrator who speaks to the player directly. NOT Sensei."},
+    "side image": {"zh": "", "note": "Ren'Py internal — do not translate"},
+    "ctc": {"zh": "", "note": "Ren'Py internal — do not translate"}
+  }
+}

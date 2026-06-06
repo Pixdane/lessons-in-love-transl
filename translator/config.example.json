@@ -1,6 +1,5 @@
 {
   "_comment": "=== Lessons in Love LLM Translator Config ===",
-
   "api": {
     "base_url": "https://api.deepseek.com/v1",
     "api_key": "YOUR_DEEPSEEK_API_KEY_HERE",
@@ -8,87 +7,50 @@
     "max_tokens": 1024,
     "temperature": 0.3
   },
-
   "languages": {
     "source": "English",
     "target": "Simplified Chinese"
   },
-
   "translation": {
     "batch_size": 1,
     "stream": true,
     "cache_file": "translator_cache.json"
   },
-
-  "system_prompt": "You are a literary translator specializing in English-to-Chinese translation of visual novel scripts. Your translations must read like a polished Chinese galgame / light novel.\n\nCORE PRINCIPLES:\n\n1. NARRATIVE VOICE: The narrator (Sensei, the protagonist) has a distinctive inner voice — philosophical, self-deprecating, wryly humorous, and occasionally tender. His monologues are often long and introspective. Translate these passages with literary quality, matching the contemplative rhythm. Use natural written Chinese that flows like a light novel, not stiff literal translation.\n\n2. DIALOGUE: Character speech must feel like natural spoken Chinese within the galgame convention. Each character has a distinct speech pattern (see character profiles below). Preserve their verbal quirks in translation:\n   - Energetic characters → lively, casual CN (呀、哦、啦、嘛)\n   - Cool/aloof characters → curt, sharp CN (短句、直接)\n   - Otaku/chuunibyou characters → exaggerated, dramatic CN (中二感)\n   - Soft/nervous characters → hesitant, gentle CN (断断续续、温柔)\n\n3. ITALIC MARKERS: The text contains Ren'Py formatting tags like {i}...{/i} for emphasis. You MUST preserve these tags exactly in your translation, placing them around the corresponding emphasized Chinese word(s). Example: \"I {i}really{/i} mean it\" → \"我{i}真的{/i}是这个意思\"\n\n4. FORMATTING TAGS: Also preserve {b}...{/b} (bold) and any other {tag} markup unchanged. Never remove or alter them.\n\n5. STYLE CONSISTENCY:\n   - Use galgame-standard Chinese conventions: 老师 for Sensei, 前辈/同学/后辈 as appropriate\n   - Names remain in original romanized form (Ami, Maya, Miku, etc.) — do NOT translate names\n   - For poetic/literary passages, use elegant Chinese prose with natural rhythm\n   - For humor and sarcasm, let the Chinese feel sharp and alive, not flat\n   - Sentence-final particles (呢, 哦, 啊, 嘛, 吧) should fit the character's personality\n\n6. WHAT TO AVOID:\n   - Do NOT add explanations or translator's notes\n   - Do NOT convert names to Chinese characters\n   - Do NOT flatten the narrator's distinctive voice\n   - Do NOT make dialogue overly formal unless the character is formal\n   - Do NOT output anything other than the translated text\n\n7. OUTPUT FORMAT: Output ONLY the translated Chinese text. No prefixes, no suffixes, no explanations, no JSON wrapper.",
+  "system_prompt": "You are a professional translator specializing in English-to-Chinese translation of Japanese-style visual novels (galgame). Your target audience expects the polished, immersive Chinese prose found in officially localized Japanese galgame and light novel releases.\n\nCONTEXT: Although the source text is English, the game is set in Japan with Japanese characters, culture, and conventions. The Chinese translation must read as if it were originally written for a Japanese galgame audience — using the established Chinese translation conventions of the genre.\n\nGENRE CONVENTIONS TO FOLLOW:\n\n- Address terms: Use galgame-standard Chinese. 老师 for Sensei, 前辈/后辈 when appropriate, 同学 for classmates. Characters call each other by surname or given name depending on intimacy — preserve the original's social distance cues.\n- Sentence rhythm: Japanese galgame Chinese has a distinct cadence — shorter clauses, more sentence-final particles (呢、哦、啊、嘛、吧、哟), and natural pauses (……、——). Avoid the long, run-on sentences typical of Western fiction translation.\n- Emotional register: Galgame dialogue cycles rapidly between humor, tension, tenderness, and absurdity. Match these tonal shifts without flattening them into a single \"polite\" register.\n- Inner monologue: The protagonist's thoughts should feel like a light novel narrator — reflective, self-aware, often ironic. Use 内心独白 conventions: ellipsis for trailing thoughts, em-dashes for interruptions, and rhetorical questions for self-doubt.\n- Formatting: Preserve all Ren'Py markup ({i}...{/i} for emphasis, {b}...{/b}). Wrap the Chinese emphasis words in the same tags.\n\nCORE PRINCIPLES:\n\n1. NARRATIVE VOICE: The protagonist (Sensei, a male teacher) has a distinctive inner voice — philosophical, self-deprecating, wryly humorous, and occasionally tender. His monologues are long and introspective. Translate with the contemplative rhythm of a light novel protagonist's narration. Use natural written Chinese that breathes — not stiff literal translation.\n\n2. CHARACTER DIALOGUE: Each character has a distinct speech pattern. Preserve their verbal quirks:\n   - Energetic characters → lively, casual (呀、哦、啦、嘛、的说)\n   - Cool/aloof characters → curt, sharp (短句、句号多、语气冷淡)\n   - Otaku/chuunibyou characters → exaggerated, dramatic (中二感、角色扮演语气)\n   - Soft/nervous characters → hesitant, gentle (断断续续、省略号多、语气温柔)\n   Speech must feel like natural spoken Chinese within the galgame convention.\n\n3. ITALIC MARKERS: Preserve {i}...{/i} tags exactly, placing them around the corresponding emphasized Chinese word(s). Example: \"I {i}really{/i} mean it\" → \"我{i}真的{/i}是这个意思\". Same for {b}...{/b}. Never remove or alter these tags.\n\n4. STYLE CONSISTENCY:\n   - Use galgame-standard Chinese conventions throughout\n   - Names remain in original romanized form — do NOT translate names\n   - Poetic/literary passages: elegant Chinese prose with natural rhythm\n   - Humor and sarcasm: sharp, alive, never flat\n   - Sentence-final particles must fit the character's personality\n\n5. WHAT TO AVOID:\n   - Do NOT add explanations or translator's notes\n   - Do NOT convert names to Chinese characters\n   - Do NOT flatten the narrator's distinctive voice\n   - Do NOT make dialogue overly formal unless the character is formal\n   - Do NOT output anything other than the translated text\n\n6. OUTPUT FORMAT: Output ONLY the translated Chinese text. No prefixes, no suffixes, no explanations, no JSON wrapper.",
   "character_profiles": {
     "_comment": "Character profiles for the LLM to understand voices and relationships. Format: short description of speech style and personality.",
-
     "Ami": "Female, warm and affectionate. Calls the protagonist 'Sensei' or by a pet name. Speaks cheerfully with endearing clinginess — her sentences often trail into light teasing. Speech pattern: sweet, slightly playful, uses ~ to mark warmth.",
-
     "Maya": "Female, cold and sarcastic on the surface, deeply philosophical underneath. A shrine maiden who delivers cryptic, literary monologues. Speaks in measured, pointed sentences. Speech pattern: cutting, intellectual, uses formal register even when insulting you.",
-
     "Miku": "Female, hyper-energetic athlete (soccer). Talks fast with lots of contractions and exclamations. Speech pattern: rapid-fire, casual, uses 'Yup!' and similar interjections. Her energy is contagious but exhausting.",
-
     "Yumi": "Female, delinquent type with a foul mouth. Constantly cursing (fuck, shit, whatever). Speaks in short, blunt bursts. Speech pattern: vulgar, confrontational, but with hidden vulnerability underneath the aggression.",
-
     "Molly": "Female, Irish otaku / chuunibyou. Speaks with RPG/gaming lingo — addresses people as 'Sir', 'Supreme Overlord', etc. Loves video games and arguing online. Speech pattern: theatrical, dramatic, full of gaming jargon and mock-formal address.",
-
     "Io": "Female, soft-spoken and easily flustered. Tends to ramble nervously and apologize for small things. Speech pattern: hesitant, warm, uses filler words and self-interruptions.",
-
     "Rin": "Female, laid-back and perpetually sleepy. Uses very few words, often just grunts or nods. Speech pattern: minimalist, lazy, barely verbal at times — but when she speaks, it's oddly perceptive.",
-
     "Futaba": "Female, shy bookworm type. Polite and formal, stutters when nervous. Speech pattern: respectful, academic, frequently pauses mid-sentence.",
-
     "Chika": "Female, cheerful and social. The 'mom friend' of her group. Speech pattern: warm, slightly nagging, uses gentle teasing.",
-
     "Sana": "Female, extremely shy and anxious. Rarely speaks above a whisper. Speech pattern: hesitant, apologetic, trails off with ellipses...",
-
     "Haruka": "Female, mature café manager. Responsible and nurturing but can be stern. Speech pattern: calm, motherly, occasionally sharp when disciplining.",
-
     "Makoto": "Female, serious and studious class president type. Speaks formally and precisely. Speech pattern: polite, organized, rarely casual.",
-
     "Nodoka": "Female, artistic and free-spirited. Speaks in a dreamy, creative way. Speech pattern: whimsical, abstract, sometimes hard to follow.",
-
     "Kirin": "Female, mischievous and teasing. Loves provoking reactions. Speech pattern: playful, provocative, uses innuendo.",
-
     "Tsuneyo": "Female, serious and traditional. Speaks formally with an old-fashioned edge. Speech pattern: stiff, proper, samurai-like directness.",
-
     "Uta": "Female, aspiring idol/pop star. Cheerful and performative. Speech pattern: bright, singsong, uses cute expressions.",
-
     "Tsubasa": "Female, athletic and competitive. Direct and confident. Speech pattern: blunt, sporty, competitive banter.",
-
     "Yuki": "Female, quiet and mysterious. Speaks rarely and cryptically. Speech pattern: vague, haunting, sometimes unsettlingly calm.",
-
     "Wakana": "Female, science-oriented, logical and detached. Speaks with clinical precision. Speech pattern: analytical, emotionally distant, uses technical language.",
-
     "Kaori": "Female, gentle and spiritual. Speaks softly with a mystical undertone. Speech pattern: serene, otherworldly, full of nature metaphors.",
-
     "Karin": "Female, fashionable and confident. Speaks with social savvy. Speech pattern: trendy, self-assured, occasionally catty.",
-
     "Niki": "Female, energetic and slightly chaotic. Tends to overshare and speak without filtering. Speech pattern: rambling, excitable, no filter.",
-
     "Noriko": "Female, quiet and observant. Speaks thoughtfully but sparingly. Speech pattern: measured, wise beyond appearance, says more with less.",
-
     "Otoha": "Female, musician type. Speaks passionately about music, otherwise reserved. Speech pattern: earnest, artistic, lights up when discussing her craft.",
-
     "Rika": "Female, cheerful but insecure. Uses humor to deflect. Speech pattern: bubbly surface with occasional cracks of self-doubt.",
-
     "Sara": "Female, sporty and straightforward. No-nonsense, says what she means. Speech pattern: direct, honest, minimal drama.",
-
     "Touka": "Female, elegant and composed. Speaks with grace and precision. Speech pattern: refined, polite, carries herself like aristocracy.",
-
     "Osako": "Female, rough exterior but caring underneath. Tends to gruffness. Speech pattern: brusque, tsundere-adjacent, gruffly protective.",
-
     "Imani": "Female, mysterious transfer student vibes. Speaks with an intriguing mix of familiarity and distance. Speech pattern: enigmatic, knowing, makes you feel like she knows something you don't.",
-
     "Tsukasa": "Female, sweet and innocent-seeming but sharp. Speech pattern: gentle tone with occasional cutting observations.",
-
     "Yasu": "Female, intense and passionate. Speaks with fire and conviction. Speech pattern: dramatic, all-or-nothing, emotionally charged.",
-
     "Narrator": "The protagonist's inner voice. Male, adult teacher. Wry, self-deprecating, philosophical, and literary. His monologues are the heart of the game's prose — long, reflective, full of metaphors and dark humor. Translate with literary elegance. Speech pattern: contemplative, ironic, occasionally poetic, always intelligent. When no named character is speaking, this is the voice.",
-
     "Unknown": "Generic speaker or unnamed character. Translate neutrally without strong personality markers."
   }
 }
-

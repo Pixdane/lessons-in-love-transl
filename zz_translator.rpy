@@ -1,239 +1,327 @@
 ## ============================================================
-## Lessons in Love — LLM Translation Overlay
-## Non-invasive: delete this file to restore original game.
-## Keys: T=toggle translation, R=refresh current line
+## Lessons in Love — LLM Translation Layer
+## Drop-in file. Delete to restore original game.
 ## ============================================================
 
 init -100 python:
-    import json, os, threading, time
-
+    import json as _json
+    import os as _os
+    import re as _re
+    import threading as _threading
     import renpy.store as store
 
-    _TL_DIR = os.path.join(renpy.config.gamedir, "translator")
-    _TL_CONFIG_PATH = os.path.join(_TL_DIR, "config.json")
-    _TL_CACHE_PATH  = os.path.join(_TL_DIR, "cache.json")
-    _TL_STATE_PATH  = os.path.join(_TL_DIR, "state.json")
-    os.makedirs(_TL_DIR, exist_ok=True)
+    try:
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError, URLError
+    except ImportError:
+        from urllib2 import Request, urlopen, HTTPError, URLError
+    import ssl
+    try:
+        _TL_SSL_CTX = ssl._create_unverified_context()
+    except Exception:
+        _TL_SSL_CTX = None
 
+    def _tl_urlopen(req, timeout=30):
+        if _TL_SSL_CTX is not None:
+            return urlopen(req, timeout=timeout, context=_TL_SSL_CTX)
+        else:
+            return urlopen(req, timeout=timeout)
+
+    # -- paths ------------------------------------------------------------------
+    _TL_DIR = _os.path.join(renpy.config.gamedir, "translator")
+    _TL_CFG   = _os.path.join(_TL_DIR, "config.json")
+    _TL_CACHE = _os.path.join(_TL_DIR, "cache.json")
+    _TL_STATE = _os.path.join(_TL_DIR, "state.json")
+    _TL_GLOSS = _os.path.join(_TL_DIR, "glossary.json")
+    _os.makedirs(_TL_DIR, exist_ok=True)
+
+    # -- json helpers -----------------------------------------------------------
     def _tl_load_json(path, default=None):
         try:
             with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                return _json.load(f)
         except Exception:
             return default if default is not None else {}
 
     def _tl_save_json(path, data):
         try:
             with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+                _json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
 
-    _tl_config = _tl_load_json(_TL_CONFIG_PATH, {})
-    _tl_cache  = _tl_load_json(_TL_CACHE_PATH, {})
-    _tl_state  = _tl_load_json(_TL_STATE_PATH, {"enabled": True})
+    # -- load persistent state --------------------------------------------------
+    _tl_cfg   = _tl_load_json(_TL_CFG, {})
+    _tl_cache = _tl_load_json(_TL_CACHE, {})
+    _tl_state = _tl_load_json(_TL_STATE, {"enabled": True})
+
+    # -- build system prompt ----------------------------------------------------
+    _tl_system_prompt = _tl_cfg.get("system_prompt", "")
+    _tl_glossary = _tl_load_json(_TL_GLOSS, {})
+    if _tl_glossary:
+        lines = ["\n\n## TERMINOLOGY GLOSSARY\nUse these translations for the following terms:\n"]
+        for category, terms in _tl_glossary.items():
+            if category.startswith("_"):
+                continue
+            cat_name = category.replace("_", " ").title()
+            lines.append("\n### {}\n".format(cat_name))
+            for en, entry in terms.items():
+                zh = entry.get("zh", "")
+                note = entry.get("note", "")
+                if zh:
+                    line = "- {} -> {}".format(en, zh)
+                    if note:
+                        line += " ({})".format(note)
+                    lines.append(line)
+        _tl_system_prompt += "\n".join(lines)
+
+    _tl_api = _tl_cfg.get("api", {})
+    _tl_api_key = _tl_api.get("api_key", "")
+    _tl_api_ok = bool(_tl_api_key) and _tl_api_key != "YOUR_DEEPSEEK_API_KEY_HERE"
+
 
 init -99 python:
     class TranslatorEngine:
+        """Translation lifecycle: cache, background API calls."""
+
         def __init__(self):
-            self._lock = threading.Lock()
+            self._lock = _threading.Lock()
             self._pending = {}
             self._done = {}
 
         @property
         def enabled(self):
-            return _tl_state.get("enabled", True)
+            return _tl_state.get("enabled", True) and _tl_api_ok
 
         @enabled.setter
         def enabled(self, val):
             _tl_state["enabled"] = val
-            _tl_save_json(_TL_STATE_PATH, _tl_state)
+            _tl_save_json(_TL_STATE, _tl_state)
 
-        def cache_key(self, speaker, text):
+        def _key(self, speaker, text):
             clean = text.replace("{i}", "").replace("{/i}", "")\
                         .replace("{b}", "").replace("{/b}", "").strip()
-            return "{}|||{}".format(speaker or "NARRATOR", clean)
+            return "{}|||{}".format(speaker or "(Narrator)", clean)
 
         def get(self, speaker, text):
             if not self.enabled:
                 return ""
-            if not text or not text.strip():
+            if not text or not isinstance(text, str) or not text.strip():
                 return ""
             stripped = text.replace("{i}", "").replace("{/i}", "")\
                            .replace("{b}", "").replace("{/b}", "").strip()
             if len(stripped) <= 1:
                 return ""
-            key = self.cache_key(speaker, text)
+            key = self._key(speaker, text)
             if key in _tl_cache:
                 return _tl_cache[key]
+            if _os.path.exists(_TL_CACHE):
+                fresh = _tl_load_json(_TL_CACHE, {})
+                if key in fresh:
+                    _tl_cache.clear()
+                    _tl_cache.update(fresh)
+                    return _tl_cache[key]
             with self._lock:
                 if key in self._done:
-                    val = self._done.pop(key)
-                    _tl_cache[key] = val
-                    self._save_cache_deferred()
-                    return val
-                if key not in self._pending:
-                    self._pending[key] = True
-                    t = threading.Thread(
-                        target=self._translate_bg,
-                        args=(speaker, text, key),
-                        daemon=True,
-                    )
-                    t.start()
+                    result = self._done.pop(key)
+                    _tl_cache[key] = result
+                    _tl_save_json(_TL_CACHE, _tl_cache)
+                    return result
+                if key in self._pending:
                     return "..."
+                self._pending[key] = True
+            t = _threading.Thread(target=self._worker, args=(speaker, text), daemon=True)
+            t.start()
             return "..."
 
         def refresh(self, speaker, text):
-            key = self.cache_key(speaker, text)
+            key = self._key(speaker, text)
             _tl_cache.pop(key, None)
             with self._lock:
-                self._done.pop(key, None)
                 self._pending.pop(key, None)
-            _tl_save_json(_TL_CACHE_PATH, _tl_cache)
-            self.get(speaker, text)
-
-        def refresh_current(self):
-            speaker = getattr(store, "_tl_speaker", None)
-            text = getattr(store, "_tl_text", None)
-            if text:
-                self.refresh(speaker, text)
-
-        def _translate_bg(self, speaker, text, key):
-            try:
-                result = self._call_api(speaker, text)
-                with self._lock:
-                    self._done[key] = result
-            except Exception:
-                with self._lock:
-                    self._done[key] = "[Translation failed]"
-            finally:
-                with self._lock:
-                    self._pending.pop(key, None)
+                self._done.pop(key, None)
+            _tl_save_json(_TL_CACHE, _tl_cache)
+            return self.get(speaker, text)
 
         def _call_api(self, speaker, text):
-            api_cfg = _tl_config.get("api", {})
-            base_url = api_cfg.get("base_url", "https://api.deepseek.com/v1")
-            api_key  = api_cfg.get("api_key", "")
-            model    = api_cfg.get("model", "deepseek-chat")
-            max_tok  = api_cfg.get("max_tokens", 1024)
-            temp     = api_cfg.get("temperature", 0.3)
-            system_prompt = _tl_config.get("system_prompt", "")
+            api = _tl_cfg.get("api", {})
+            base = api.get("base_url", "https://api.deepseek.com/v1").rstrip("/")
+            body = _json.dumps({
+                "model": api.get("model", "deepseek-chat"),
+                "messages": [
+                    {"role": "system", "content": _tl_system_prompt},
+                    {"role": "user",
+                     "content": "Speaker: {}\n\nTranslate:\n{}".format(
+                         speaker or "(Narrator)", text)},
+                ],
+                "max_tokens": api.get("max_tokens", 1024),
+                "temperature": api.get("temperature", 0.3),
+                "stream": False,
+            }).encode("utf-8")
+            req = Request(base + "/chat/completions", data=body)
+            req.add_header("Authorization", "Bearer {}".format(api.get("api_key", "")))
+            req.add_header("Content-Type", "application/json")
+            try:
+                resp = _tl_urlopen(req, timeout=30)
+                raw = resp.read().decode("utf-8")
+                data = _json.loads(raw)
+                result = data["choices"][0]["message"]["content"].strip()
+            except Exception as e:
+                return "[Error: {}]".format(str(e)[:80])
+            wrappers = [('"', '"'), ("'", "'"), ("\u201c", "\u201d"), ("\u300c", "\u300d")]
+            for left, right in wrappers:
+                if len(result) >= 2 and result.startswith(left) and result.endswith(right):
+                    inner = result[1:-1].strip()
+                    if inner:
+                        result = inner
+                        break
+            result = _re.sub(
+                r'^(Translation|译文|翻译)\s*[:：]\s*',
+                '', result, flags=_re.IGNORECASE
+            ).strip()
+            result = _re.sub(r'  +', ' ', result)
+            result = _re.sub(r'\n\n+', '\n', result)
+            cr = result.replace("{i}", "").replace("{/i}", "")\
+                       .replace("{b}", "").replace("{/b}", "").strip()
+            co = text.replace("{i}", "").replace("{/i}", "")\
+                     .replace("{b}", "").replace("{/b}", "").strip()
+            if cr.lower() == co.lower() and len(co) > 3:
+                return "[Same as original]"
+            return result.strip()
 
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": "Speaker: {}\n\nTranslate:\n{}".format(speaker or "(Narrator)", text)},
-            ]
-
-            import requests as _requests
-            resp = _requests.post(
-                "{}/chat/completions".format(base_url.rstrip("/")),
-                headers={
-                    "Authorization": "Bearer {}".format(api_key),
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": max_tok,
-                    "temperature": temp,
-                    "stream": False,
-                },
-                timeout=30,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"].strip()
-
-        _save_debounce = 0.0
-
-        def _save_cache_deferred(self):
-            now = time.time()
-            if now - self._save_debounce > 2.0:
-                self._save_debounce = now
-                _tl_save_json(_TL_CACHE_PATH, _tl_cache)
+        def _worker(self, speaker, text):
+            key = self._key(speaker, text)
+            result = self._call_api(speaker, text)
+            with self._lock:
+                self._done[key] = result
 
     tl_engine = TranslatorEngine()
 
+
+# ================================================================
+# Dialogue interception
+# ================================================================
+
 init -98 python:
-    _orig_character_call = Character.__call__
+    _say_orig = renpy.exports.say
 
-    def _tl_patched_call(self, what, interact=True, _call_done=True, multiple=None, **kwargs):
-        # Process who/what the same way the original does,
-        # so cache keys match history entries exactly.
-        who_raw = self.name if hasattr(self, "name") and self.name else None
-        what_processed = self.prefix_suffix("what", self.what_prefix, what, self.what_suffix)
-        if who_raw is not None:
-            who_processed = self.prefix_suffix("who", self.who_prefix, who_raw, self.who_suffix)
-            store._tl_speaker = who_processed
+    def _say_hook(who, what, *a, **kw):
+        if who is None:
+            sp = "(Narrator)"
+        elif hasattr(who, "name"):
+            sp = who.name or "(Narrator)"
         else:
-            store._tl_speaker = "(Narrator)"
-        store._tl_text = what_processed
-        store._tl_time = time.time()
-        return _orig_character_call(self, what, interact=interact,
-                                    _call_done=_call_done, multiple=multiple, **kwargs)
+            sp = str(who) if who else "(Narrator)"
+        store._tl_sp = sp
+        store._tl_tx = what
+        return _say_orig(who, what, *a, **kw)
 
-    Character.__call__ = _tl_patched_call
+    renpy.exports.say = _say_hook
 
+
+# ================================================================
+# Translation overlay
+# ================================================================
 
 init -97 python:
     def _tl_overlay_func(st, at):
-        text = getattr(store, "_tl_text", None)
-        speaker = getattr(store, "_tl_speaker", None)
+        text = getattr(store, "_tl_tx", None)
+        speaker = getattr(store, "_tl_sp", None)
+
         if not text or not tl_engine.enabled:
-            return renpy.text.text.Text(""), None
+            return renpy.text.text.Text("", substitute=False), None
+
         result = tl_engine.get(speaker, text)
+
         if not result:
-            return renpy.text.text.Text(""), None
+            return renpy.text.text.Text("", substitute=False), None
+
         if result == "...":
-            txt = renpy.text.text.Text("...", style="tl_wait_style")
-            return txt, 0.3
-        txt = renpy.text.text.Text(result, style="tl_text_style")
+            return renpy.text.text.Text("", substitute=False), 0.3
+
+        if result.startswith("[Error") or result == "[Same as original]":
+            return renpy.text.text.Text("", substitute=False), None
+
+        txt = renpy.text.text.Text(result, style="tl_overlay_style", substitute=False)
         return txt, None
 
 
 screen tl_overlay():
     if tl_engine.enabled:
-        add DynamicDisplayable(_tl_overlay_func):
+        fixed:
             xpos 402
-            ypos 790
+            ypos 745
             xmaximum 1116
+            add DynamicDisplayable(_tl_overlay_func)
 
 
 init -96 python:
     config.overlay_screens.append("tl_overlay")
+    config.overlay_screens.append("tl_buttons")
 
-    style.tl_text_style = Style(style.default)
-    style.tl_text_style.size = 24
-    style.tl_text_style.color = "#888888"
-    style.tl_text_style.font = "YuGothM.ttc"
-    style.tl_text_style.line_spacing = 2
+    style.tl_overlay_style = Style(style.default)
+    style.tl_overlay_style.size = 36
+    style.tl_overlay_style.color = "#ffffff"
+    style.tl_overlay_style.font = "translator/SourceHanSansCN-Regular.otf"
+    style.tl_overlay_style.line_spacing = 4
+    style.tl_overlay_style.outlines = [(2, "#000000aa", 0, 0)]
 
-    style.tl_wait_style = Style(style.tl_text_style)
-    style.tl_wait_style.color = "#666666"
-    style.tl_wait_style.italic = True
+    def _tl_toggle():
+        tl_engine.enabled = not tl_engine.enabled
+        renpy.restart_interaction()
+
+    def _tl_retranslate():
+        sp = getattr(store, "_tl_sp", None)
+        tx = getattr(store, "_tl_tx", None)
+        if sp and tx:
+            tl_engine.refresh(sp, tx)
+            renpy.restart_interaction()
+
+
+# ================================================================
+# Toolbar buttons
+# ================================================================
+
+screen tl_buttons():
+    if _tl_api_ok:
+        fixed:
+            xpos 1600
+            ypos 1020
+            hbox:
+                spacing 6
+                if tl_engine.enabled:
+                    textbutton "隐藏译文" action Function(store._tl_toggle):
+                        text_style "tl_btn_text"
+                        style "tl_btn"
+                else:
+                    textbutton "显示译文" action Function(store._tl_toggle):
+                        text_style "tl_btn_text"
+                        style "tl_btn"
+                if tl_engine.enabled:
+                    textbutton "重新翻译" action Function(store._tl_retranslate):
+                        text_style "tl_btn_text"
+                        style "tl_btn"
 
 
 init -95 python:
-    def _tl_toggle():
-        tl_engine.enabled = not tl_engine.enabled
-        renpy.notify("Translation: {}".format("ON" if tl_engine.enabled else "OFF"))
+    style.tl_btn = Style(style.empty)
+    style.tl_btn.xpadding = 10
+    style.tl_btn.ypadding = 7
+    style.tl_btn.xmargin = 0
+    style.tl_btn.ymargin = 0
 
-    def _tl_refresh():
-        if tl_engine.enabled:
-            tl_engine.refresh_current()
-            renpy.notify("Retranslating...")
+    style.tl_btn_text = Style(style.default)
+    style.tl_btn_text.size = 24
+    style.tl_btn_text.color = "#ffffff"
+    style.tl_btn_text.hover_color = "#ffffff"
+    style.tl_btn_text.selected_color = "#ffffff"
+    style.tl_btn_text.insensitive_color = "#444444"
+    style.tl_btn_text.outlines = [(1, "#000000cc", 0, 0)]
+    style.tl_btn_text.font = "translator/SourceHanSansCN-Regular.otf"
 
-    config.keymap["toggle_translation"] = ["t"]
-    config.keymap["refresh_translation"] = ["shift_T", "r"]
-    config.underlay.append(
-        renpy.Keymap(
-            toggle_translation=_tl_toggle,
-            refresh_translation=_tl_refresh,
-        )
-    )
 
 # ================================================================
-# History screen override — shows translation in backlog
+# History screen
 # ================================================================
 
 screen history():
@@ -261,10 +349,9 @@ screen history():
                 text what:
                     substitute False
 
-                # ---- Translation below original ----
                 if tl_engine.enabled:
                     $ tl = tl_engine.get(str(h.who) if h.who else "(Narrator)", h.what)
-                    if tl and tl != "..." and tl != "[Translation failed]":
+                    if tl and tl != "..." and not tl.startswith("[Error") and tl != "[Same as original]":
                         text tl:
                             style "history_tl"
                             substitute False
@@ -272,10 +359,26 @@ screen history():
         if not _history_list:
             label _("The dialogue history is empty.")
 
+    if _tl_api_ok:
+        fixed:
+            xpos 1600
+            ypos 1020
+            hbox:
+                spacing 6
+                if tl_engine.enabled:
+                    textbutton "隐藏译文" action Function(store._tl_toggle):
+                        text_style "tl_btn_text"
+                        style "tl_btn"
+                else:
+                    textbutton "显示译文" action Function(store._tl_toggle):
+                        text_style "tl_btn_text"
+                        style "tl_btn"
+
 
 init -94 python:
     style.history_tl = Style(style.history_text)
-    style.history_tl.size = 20
-    style.history_tl.color = "#777777"
-    style.history_tl.ypos = 28
-    style.history_tl.line_spacing = 1
+    style.history_tl.size = 24
+    style.history_tl.color = "#444444"
+    style.history_tl.font = "translator/SourceHanSansCN-Regular.otf"
+    style.history_tl.ypos = 30
+    style.history_tl.line_spacing = 2

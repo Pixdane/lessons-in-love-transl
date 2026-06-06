@@ -1,1 +1,5 @@
 .DS_Store
+translator/config.json
+translator/cache.json
+translator/state.json
+translator/SourceHanSansCN-Regular.otf
